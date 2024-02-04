@@ -34,8 +34,9 @@ export function initOpenAI() {
 }
 
 export async function transcribeOpenAI(audioBuffer: Buffer): Promise<{ text: string; language: string }> {
+
 	const url = config.openAIServerUrl;
-	let language = "";
+	let language = config.transcriptionLanguage;
 
 	const tempdir = os.tmpdir();
 	const oggPath = path.join(tempdir, randomUUID() + ".ogg");
@@ -46,34 +47,27 @@ export async function transcribeOpenAI(audioBuffer: Buffer): Promise<{ text: str
 		await convertOggToWav(oggPath, wavPath);
 	} catch (e) {
 		fs.unlinkSync(oggPath);
+		// error logging
+		console.error(`Could not convert to wav. ${e}`);
 		return {
 			text: "",
 			language
 		};
 	}
 
-	// FormData
-	const formData = new FormData();
-	formData.append("file", new File([blobFromSync(wavPath)], wavFilename, { type: "audio/wav" }));
-	formData.append("model", "whisper-1");
-	if (config.transcriptionLanguage) {
-		formData.append("language", config.transcriptionLanguage);
-		language = config.transcriptionLanguage;
-	}
-
-	const headers = new Headers();
-	headers.append("Authorization", `Bearer ${getConfig("gpt", "apiKey")}`);
-
-	// Request options
-	const options = {
-		method: "POST",
-		body: formData,
-		headers
-	};
+	const { Configuration, OpenAIApi } = require("openai");
+	const configuration = new Configuration({
+		apiKey: getConfig("gpt", "apiKey"),
+	});
+	const open_ai = new OpenAIApi(configuration);
 
 	let response;
 	try {
-		response = await fetch(url, options);
+		console.log(wavPath);
+		response = await open_ai.createTranscription(
+			fs.createReadStream(wavPath),
+			"whisper-1"
+		);
 	} catch (e) {
 		console.error(e);
 	} finally {
@@ -88,10 +82,10 @@ export async function transcribeOpenAI(audioBuffer: Buffer): Promise<{ text: str
 			language: language
 		};
 	}
-
-	const transcription = await response.json();
+	console.log(response.data.text);
+	// const transcription = await response.json();
 	return {
-		text: transcription.text,
+		text: response.data.text,
 		language
 	};
 }
