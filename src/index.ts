@@ -81,7 +81,8 @@ const start = async () => {
 				message = '';
 				qrCode = url;
 				io.emit('reloadPage');
-				cli.printQRCode(url);
+				//cli.printQRCode(url);
+				console.log("Scan the loaded QR code to login to Whatsapp Web...");
 			}
 		);
 	});
