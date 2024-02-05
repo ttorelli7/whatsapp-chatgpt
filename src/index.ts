@@ -15,6 +15,42 @@ import { initOpenAI } from "./providers/openai";
 // Ready timestamp of the bot
 let botReadyTimestamp: Date | null = null;
 
+const express = require('express');
+const app = express();
+const http = require('http');
+const socketIo = require('socket.io');
+
+app.set('view engine', 'ejs');
+app.set('views', __dirname + '/views');
+
+// Configuração do Socket.io
+const server = http.createServer(app);
+const io = socketIo(server);
+
+let message = 'Carregando QR Code, aguarde...';
+let qrCode = '';
+
+const port = 3000;
+/*app.listen(port, () => {
+	console.log(`App listening on port ${port}`)
+});*/
+server.listen(port, () => {
+	console.log(`App listening on port ${port}`)
+});
+
+app.get('/', (req, res) => {
+	res.render('index', { message, qrCode });
+});
+
+/*app.get('/', (req, res) => {
+	if (!qrCode) {
+		res.header("refresh", "5");
+		return res.send('Carregando QR Code, aguarde alguns segundos...');
+	}
+	res.header("refresh", "20");
+	res.send(qrCode);
+});*/
+
 // Entrypoint
 const start = async () => {
 	//cli.printIntro();
@@ -35,13 +71,16 @@ const start = async () => {
 		qrcode.toString(
 			qr,
 			{
-				type: "terminal",
-				small: true,
+				type: "svg",
+				//small: true,
 				margin: 2,
 				scale: 1
 			},
 			(err, url) => {
 				if (err) throw err;
+				message = '';
+				qrCode = url;
+				io.emit('reloadPage');
 				cli.printQRCode(url);
 			}
 		);
@@ -74,6 +113,10 @@ const start = async () => {
 
 		initAiConfig();
 		initOpenAI();
+
+		message = 'Autenticado com sucesso!';
+		qrCode = '';
+		io.emit('reloadPage');
 	});
 
 	// WhatsApp message

@@ -13,12 +13,15 @@
 		"aws-sdk": "^2.1467.0",
 		"chatgpt": "^5.2.5",
 		"dotenv": "^16.3.1",
+		"ejs": "^3.1.9",
+		"express": "^4.18.2",
 		"fetch-blob": "^4.0.0",
 		"ffmpeg": "^0.0.4",
 		"langchain": "^0.0.156",
 		"openai": "^3.3.0",
 		"picocolors": "^1.0.0",
 		"qrcode": "^1.5.3",
+		"socket.io": "^4.7.4",
 		"whatsapp-web.js": "https://github.com/Julzk/whatsapp-web.js/tarball/jkr_hotfix_7"
 	},
 	"engines": {
