@@ -90,6 +90,9 @@ const start = async () => {
 	// WhatsApp loading
 	client.on(Events.LOADING_SCREEN, (percent) => {
 		if (percent == "0") {
+			message = 'Autenticando...';
+			qrCode = '';
+			io.emit('reloadPage');
 			cli.printLoading();
 		}
 	});
