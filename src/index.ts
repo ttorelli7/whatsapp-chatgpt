@@ -30,11 +30,12 @@ const io = socketIo(server);
 let message = 'Carregando QR Code, aguarde...';
 let qrCode = '';
 
-const port = 3000;
+const port = 80;
 /*app.listen(port, () => {
 	console.log(`App listening on port ${port}`)
 });*/
 server.listen(port, () => {
+	io.emit('reloadPage');
 	console.log(`App listening on port ${port}`)
 });
 
