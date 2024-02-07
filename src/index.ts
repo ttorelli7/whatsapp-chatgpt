@@ -31,7 +31,7 @@ let message = 'Carregando, aguarde...';
 let qrCode = '';
 
 let port = 3001;
-//port = 80;
+port = 80;
 /*app.listen(port, () => {
 	console.log(`App listening on port ${port}`)
 });*/
@@ -44,10 +44,10 @@ app.get('/', (req, res) => {
 	res.render('index', { message, qrCode });
 });
 
-function updatePage(message, qrCode = '') {
-	message = message;
-	qrCode = qrCode;
-	io.emit('reloadPage');
+function updatePage(newMessage, newQrCode = '') {
+	message = newMessage;
+	qrCode = newQrCode;
+	io.emit('reloadPage', { message, qrCode });
 }
 
 /*app.get('/', (req, res) => {

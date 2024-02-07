@@ -8,20 +8,23 @@
 </head>
 
 <body>
-    <h1>
+    <h1 id="message">
         <%= message %>
     </h1>
-    <%- qrCode %>
+    <span id="qrCode">
+        <%- qrCode %>
+    </span>
 
-        <!-- Adicione o script do lado do cliente para manipular o evento reloadPage -->
-        <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
-        <script>
-            const socket = io();
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+    <script>
+        const socket = io();
 
-            socket.on('reloadPage', () => {
-                window.location.reload();
-            });
-        </script>
+        socket.on('reloadPage', (data) => {
+            /*document.getElementById('message').innerText = data.message;
+            document.getElementById('qrCode').innerHTML = data.qrCode;*/
+            window.location.reload();
+        });
+    </script>
 </body>
 
 </html>
