@@ -38,30 +38,33 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 			}
 		}
 
-		const start = Date.now();
+		let promptBuilder = "";
+		// Pre prompt
+		if (config.prePrompt != null && config.prePrompt.trim() != "") {
+			if (lastConversationId) {
+				promptBuilder += "Com base nas seguintes instruções: ";
+			}
+			promptBuilder += config.prePrompt + "\n\n";
+			if (lastConversationId) {
+				promptBuilder += "Responda a seguinte mensagem: ";
+			}
+		}
+		promptBuilder += prompt;
 
+		const start = Date.now();
 		// Check if we have a conversation with the user
 		let response: ChatMessage;
 		if (lastConversationId) {
 			// Handle message with previous conversation
-			response = await chatgpt.sendMessage(prompt, {
+			response = await chatgpt.sendMessage(promptBuilder, {
 				parentMessageId: lastConversationId
 			});
 		} else {
-			let promptBuilder = "";
-
-			// Pre prompt
-			if (config.prePrompt != null && config.prePrompt.trim() != "") {
-				promptBuilder += config.prePrompt + "\n\n";
-				promptBuilder += prompt + "\n\n";
-			}
-
 			// Handle message with new conversation
 			response = await chatgpt.sendMessage(promptBuilder);
-
 			cli.print(`[GPT] New conversation for ${message.from} (ID: ${response.id})`);
 		}
-		
+
 		// Set conversation id
 		conversations[message.from] = response.id;
 
