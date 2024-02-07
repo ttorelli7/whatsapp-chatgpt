@@ -13,6 +13,9 @@ interface IConfig {
 	// Access control
 	whitelistedPhoneNumbers: string[];
 	whitelistedEnabled: boolean;
+
+	blacklistedPhoneNumbers: string[];
+	blacklistedEnabled: boolean;
 	// OpenAI
 	openAIModel: string;
 	openAIAPIKeys: string[];
@@ -59,6 +62,9 @@ interface IConfig {
 export const config: IConfig = {
 	whitelistedPhoneNumbers: process.env.WHITELISTED_PHONE_NUMBERS?.split(",") || [],
 	whitelistedEnabled: getEnvBooleanWithDefault("WHITELISTED_ENABLED", false),
+
+	blacklistedPhoneNumbers: process.env.BLACKLISTED_PHONE_NUMBERS?.split(",") || [],
+	blacklistedEnabled: getEnvBooleanWithDefault("BLACKLISTED_ENABLED", false),
 
 	openAIAPIKeys: (process.env.OPENAI_API_KEYS || process.env.OPENAI_API_KEY || "").split(",").filter((key) => !!key), // Default: []
 	openAIModel: process.env.OPENAI_GPT_MODEL || "gpt-3.5-turbo", // Default: gpt-3.5-turbo

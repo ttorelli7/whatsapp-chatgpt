@@ -49,11 +49,22 @@ async function handleIncomingMessage(message: Message) {
 
     const selfNotedMessage = message.fromMe && message.hasQuotedMsg === false && message.from === message.to;
 
+    let from = String(message.from).split('@')[0];
+
     if (config.whitelistedEnabled) {
         const whitelistedPhoneNumbers = getConfig("general", "whitelist");
 
-        if (!selfNotedMessage && whitelistedPhoneNumbers.length > 0 && !whitelistedPhoneNumbers.includes(message.from)) {
-            cli.print(`Ignoring message from ${message.from} because it is not whitelisted.`);
+        if (!selfNotedMessage && whitelistedPhoneNumbers.length > 0 && !whitelistedPhoneNumbers.includes(from)) {
+            cli.print(`Ignoring message from ${message.from} because it is not whitelist.`);
+            return;
+        }
+    }
+
+    if (config.blacklistedEnabled) {
+        const blacklistedPhoneNumbers = getConfig("general", "blacklist");
+
+        if (!selfNotedMessage && blacklistedPhoneNumbers.length > 0 && blacklistedPhoneNumbers.includes(from)) {
+            cli.print(`Ignoring message from ${message.from} because it is in blacklist.`);
             return;
         }
     }

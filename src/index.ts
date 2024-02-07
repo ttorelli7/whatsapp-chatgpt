@@ -30,7 +30,8 @@ const io = socketIo(server);
 let message = 'Carregando QR Code, aguarde...';
 let qrCode = '';
 
-const port = 80;
+let port = 3001;
+port = 80;
 /*app.listen(port, () => {
 	console.log(`App listening on port ${port}`)
 });*/
@@ -42,6 +43,12 @@ server.listen(port, () => {
 app.get('/', (req, res) => {
 	res.render('index', { message, qrCode });
 });
+
+function updatePage(message, qrCodee = '') {
+	message = message;
+	qrCode = qrCode;
+	io.emit('reloadPage');
+}
 
 /*app.get('/', (req, res) => {
 	if (!qrCode) {
@@ -79,9 +86,7 @@ const start = async () => {
 			},
 			(err, url) => {
 				if (err) throw err;
-				message = '';
-				qrCode = url;
-				io.emit('reloadPage');
+				updatePage('', url);
 				//cli.printQRCode(url);
 				console.log("Scan the loaded QR code to login to Whatsapp Web...");
 			}
@@ -91,9 +96,7 @@ const start = async () => {
 	// WhatsApp loading
 	client.on(Events.LOADING_SCREEN, (percent) => {
 		if (percent == "0") {
-			message = 'Autenticando...';
-			qrCode = '';
-			io.emit('reloadPage');
+			updatePage('Autenticando...');
 			cli.printLoading();
 		}
 	});
@@ -101,6 +104,7 @@ const start = async () => {
 	// WhatsApp authenticated
 	client.on(Events.AUTHENTICATED, () => {
 		cli.printAuthenticated();
+		updatePage('Autenticado! Carregando mensagens...');
 	});
 
 	// WhatsApp authentication failure
@@ -119,9 +123,7 @@ const start = async () => {
 		initAiConfig();
 		initOpenAI();
 
-		message = 'Autenticado com sucesso!';
-		qrCode = '';
-		io.emit('reloadPage');
+		updatePage('Disponível para uso!');
 	});
 
 	// WhatsApp message

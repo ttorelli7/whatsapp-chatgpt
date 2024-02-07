@@ -9,7 +9,8 @@ export const GeneralModule: ICommandModule = {
 	register: (): ICommandsMap => {
 		return {
 			settings,
-			whitelist
+			whitelist,
+			blacklist
 		};
 	}
 };
@@ -76,5 +77,18 @@ const whitelist: ICommandDefinition = {
 		}
 		this.data = value.split(",");
 		message.reply(`Updated whitelist phone numbers to ${this.data}`);
+	}
+};
+
+const blacklist: ICommandDefinition = {
+	help: "<value> - Set blacklisted phone numbers",
+	data: config.blacklistedPhoneNumbers,
+	execute: function (message: Message, value?: string) {
+		if (!value) {
+			message.reply(`Invalid value, please give a comma-separated list of phone numbers.`);
+			return;
+		}
+		this.data = value.split(",");
+		message.reply(`Updated blacklist phone numbers to ${this.data}`);
 	}
 };
