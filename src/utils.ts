@@ -2,6 +2,7 @@ const startsWithIgnoreCase = (str, prefix) => str.toLowerCase().startsWith(prefi
 
 import dotenv from "dotenv";
 const fs = require('fs');
+const path = require('path');
 
 const reloadEnv = (key: string = '') => {
     const keys = dotenv.parse(fs.readFileSync('.env'));
@@ -22,4 +23,9 @@ const loadPrePrompt = (): string => {
     return prePrompt;
 };
 
-export { startsWithIgnoreCase, loadPrePrompt };
+const saveEnv = (key: string, value: string) => {
+    const envFilePath = path.resolve(__dirname, '.env');
+    fs.appendFileSync(envFilePath, `${key}=${value}`);
+}
+
+export { startsWithIgnoreCase, loadPrePrompt, reloadEnv, saveEnv };

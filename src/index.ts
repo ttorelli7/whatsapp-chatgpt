@@ -31,7 +31,7 @@ let message = 'Carregando, aguarde...';
 let qrCode = '';
 
 let port = 3001;
-port = 80;
+//port = 80;
 /*app.listen(port, () => {
 	console.log(`App listening on port ${port}`)
 });*/

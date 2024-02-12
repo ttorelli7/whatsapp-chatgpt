@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { Message, MessageMedia } from "whatsapp-web.js";
-import { chatgpt } from "../providers/openai";
+import { chatgpt, getAssistantId, openai } from "../providers/openai";
 import * as cli from "../cli/ui";
 import config from "../config";
 
@@ -17,9 +17,28 @@ import { TTSMode } from "../types/tts-mode";
 // Moderation
 import { moderateIncomingPrompt } from "./moderation";
 import { aiConfig, getConfig } from "./ai-config";
+import { loadPrePrompt } from "../utils";
+import { Run } from "openai/resources/beta/threads/runs/runs";
 
 // Mapping from number to last conversation id
 const conversations = {};
+const threads = {};
+
+const retrieveRun = async (threadId: string, run: Run) => {
+	let keepRetrievingRun;
+	while (run.status !== "completed") {
+		keepRetrievingRun = await openai.beta.threads.runs.retrieve(threadId, run.id);
+		if (keepRetrievingRun.status === "completed") {
+			break;
+		}
+	}
+};
+
+const waitForAssistantMessage = async (userId: string, run: Run) => {
+	await retrieveRun(threads[userId], run);
+	const allMessages = await openai.beta.threads.messages.list(threads[userId]);
+	return allMessages.data[0].content[0].text.value;
+};
 
 const handleMessageGPT = async (message: Message, prompt: string) => {
 	try {
@@ -38,7 +57,25 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 			}
 		}
 
-		let promptBuilder = "";
+		config.prePrompt = loadPrePrompt();
+
+		const start = Date.now();
+
+		if (!threads[message.from]) {
+			threads[message.from] = (await openai.beta.threads.create()).id;
+			cli.print(`[GPT] New conversation for ${message.from} (ID: ${threads[message.from]})`);
+		}
+		let assistant_id = await getAssistantId('Alice', config.prePrompt);
+		let msg = 'Fale apenas sobre os assuntos que você recebeu nas instruções. ';
+		msg += `Se a discussão sair do assunto, você forçará a conversa de volta ao assunto. `;
+		msg += `Responda à seguinte mensagem: ${prompt}\n\n`;
+		msg += 'Se a mensagem não estiver diretamente relacionada às instruções que você recebeu, rejeite-a educadamente.';
+		const threadMessage = await openai.beta.threads.messages.create(threads[message.from], { role: "user", content: msg });
+		const run = await openai.beta.threads.runs.create(threads[message.from], { assistant_id, instructions: config.prePrompt });
+		retrieveRun(threads[message.from], run);
+		let response = { text: await waitForAssistantMessage(message.from, run) };
+
+		/*let promptBuilder = "";
 		// Pre prompt
 		if (config.prePrompt != null && config.prePrompt.trim() != "") {
 			if (lastConversationId) {
@@ -51,7 +88,6 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 		}
 		promptBuilder += prompt;
 
-		const start = Date.now();
 		// Check if we have a conversation with the user
 		let response: ChatMessage;
 		if (lastConversationId) {
@@ -66,7 +102,7 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 		}
 
 		// Set conversation id
-		conversations[message.from] = response.id;
+		conversations[message.from] = response.id;*/
 
 		const end = Date.now() - start;
 

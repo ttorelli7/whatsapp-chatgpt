@@ -9,18 +9,21 @@ import ffmpeg from "fluent-ffmpeg";
 import { blobFromSync, File } from "fetch-blob/from.js";
 import config from "../config";
 import { getConfig } from "../handlers/ai-config";
+import { reloadEnv, saveEnv } from "../utils";
 
 export let chatgpt: ChatGPTAPI;
 
 // OpenAI Client (DALL-E)
 export let openai: OpenAI;
 
+export let assistantId: string;
+
 export function initOpenAI() {
 	chatgpt = new ChatGPTAPI({
 		apiKey: getConfig("gpt", "apiKey"),
 		completionParams: {
 			model: config.openAIModel,
-			temperature: 0.7,
+			temperature: 0.5,
 			top_p: 0.9,
 			max_tokens: getConfig("gpt", "maxModelTokens")
 		}
@@ -31,6 +34,22 @@ export function initOpenAI() {
 			apiKey: getConfig("gpt", "apiKey")
 		}
 	);
+}
+
+export async function getAssistantId(name: string, instructions: string): Promise<string> {
+	if (!assistantId) {
+		assistantId = reloadEnv('ASSISTANT_ID') || "";
+	}
+	if (!assistantId) {
+		let assistant = await openai.beta.assistants.create({
+			name,
+			instructions,
+			model: config.openAIModel,
+		});
+		assistantId = assistant.id;
+		saveEnv('ASSISTANT_ID', assistantId);
+	}
+	return assistantId;
 }
 
 export async function transcribeOpenAI(audioBuffer: Buffer): Promise<{ text: string; language: string }> {
