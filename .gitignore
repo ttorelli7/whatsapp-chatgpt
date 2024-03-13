@@ -592,3 +592,8 @@ MigrationBackup/
 
 .wwebjs_cache
 .session
+
+
+gcp-key.json
+pre-prompt.txt
+threads.txt

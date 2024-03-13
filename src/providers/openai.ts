@@ -47,7 +47,7 @@ export async function getAssistantId(name: string, instructions: string): Promis
 			model: config.openAIModel,
 		});
 		assistantId = assistant.id;
-		saveEnv('ASSISTANT_ID', assistantId);
+		await saveEnv('ASSISTANT_ID', assistantId);
 	}
 	return assistantId;
 }

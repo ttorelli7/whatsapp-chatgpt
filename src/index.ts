@@ -1,3 +1,26 @@
+
+/*console.log('begin');
+await saveEnv('TESTE', '888');
+throw new Error('ok');*/
+
+/*let slots = await googleCalendar.listSlots(1, '2024-02-14', 1);
+console.log(slots);
+throw new Error('ok');
+try {
+	let x = await googleCalendar.getProcedureCalendarByMessage('Solicitação de consulta de horários para o procedimento "Limpeza de pele" - 20/02 recebida.', 5);
+	console.log(x);
+} catch (err) {
+	console.log(err);
+}*/
+//throw new Error('ok');
+
+/*let slots = await googleCalendar.listSlotsByProcedure('Limpeza de pele', '14/02/2024', 3);
+console.log(slots);
+throw new Error('ok');*/
+
+/*let x = await googleCalendar.listEventsByClient('5519995568725@c.us');
+console.log(x);*/
+
 import qrcode from "qrcode";
 import { Client, Message, Events, LocalAuth } from "whatsapp-web.js";
 
@@ -11,67 +34,29 @@ import { handleIncomingMessage } from "./handlers/message";
 // Config
 import { initAiConfig } from "./handlers/ai-config";
 import { initOpenAI } from "./providers/openai";
+import { googleCalendar } from "./extra/google-calendar";
+import { updateQrCodePage, initRoutes, serverUrl } from "./routes/routes";
+import { dateFormatter } from "./util/dateFormatter";
+
+initRoutes();
 
 // Ready timestamp of the bot
 let botReadyTimestamp: Date | null = null;
 
-const express = require('express');
-const app = express();
-const http = require('http');
-const socketIo = require('socket.io');
-
-app.set('view engine', 'ejs');
-app.set('views', __dirname + '/views');
-
-// Configuração do Socket.io
-const server = http.createServer(app);
-const io = socketIo(server);
-
-let message = 'Carregando, aguarde...';
-let qrCode = '';
-
-let port = 3001;
-//port = 80;
-/*app.listen(port, () => {
-	console.log(`App listening on port ${port}`)
-});*/
-server.listen(port, () => {
-	io.emit('reloadPage');
-	console.log(`App listening on port ${port}`)
+// WhatsApp Client
+export const client = new Client({
+	puppeteer: {
+		args: ["--no-sandbox"],
+		//headless: false,
+	},
+	authStrategy: new LocalAuth({
+		dataPath: constants.sessionPath
+	})
 });
-
-app.get('/', (req, res) => {
-	res.render('index', { message, qrCode });
-});
-
-function updatePage(newMessage, newQrCode = '') {
-	message = newMessage;
-	qrCode = newQrCode;
-	io.emit('reloadPage', { message, qrCode });
-}
-
-/*app.get('/', (req, res) => {
-	if (!qrCode) {
-		res.header("refresh", "5");
-		return res.send('Carregando QR Code, aguarde alguns segundos...');
-	}
-	res.header("refresh", "20");
-	res.send(qrCode);
-});*/
 
 // Entrypoint
 const start = async () => {
 	//cli.printIntro();
-
-	// WhatsApp Client
-	const client = new Client({
-		puppeteer: {
-			args: ["--no-sandbox"]
-		},
-		authStrategy: new LocalAuth({
-			dataPath: constants.sessionPath
-		})
-	});
 
 	// WhatsApp auth
 	client.on(Events.QR_RECEIVED, (qr: string) => {
@@ -86,9 +71,22 @@ const start = async () => {
 			},
 			(err, url) => {
 				if (err) throw err;
-				updatePage('', url);
+				updateQrCodePage('', url);
 				//cli.printQRCode(url);
-				console.log("Scan the loaded QR code to login to Whatsapp Web...");
+				//console.log("Scan the loaded QR code to login to Whatsapp Web... " + serverUrl);
+			}
+		);
+		qrcode.toString(
+			qr,
+			{
+				type: "terminal",
+				small: true,
+				margin: 2,
+				scale: 1
+			},
+			(err, url) => {
+				if (err) throw err;
+				cli.printQRCode(url);
 			}
 		);
 	});
@@ -96,7 +94,7 @@ const start = async () => {
 	// WhatsApp loading
 	client.on(Events.LOADING_SCREEN, (percent) => {
 		if (percent == "0") {
-			updatePage('Autenticando...');
+			updateQrCodePage('Autenticando...');
 			cli.printLoading();
 		}
 	});
@@ -104,7 +102,7 @@ const start = async () => {
 	// WhatsApp authenticated
 	client.on(Events.AUTHENTICATED, () => {
 		cli.printAuthenticated();
-		updatePage('Autenticado! Carregando mensagens...');
+		updateQrCodePage('Autenticado! Carregando mensagens...');
 	});
 
 	// WhatsApp authentication failure
@@ -123,7 +121,7 @@ const start = async () => {
 		initAiConfig();
 		initOpenAI();
 
-		updatePage('Disponível para uso!');
+		updateQrCodePage('Disponível para uso!');
 	});
 
 	// WhatsApp message
