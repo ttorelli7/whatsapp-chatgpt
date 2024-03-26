@@ -22,11 +22,22 @@ import { Run } from "openai/resources/beta/threads/runs/runs";
 import { client } from "..";
 import { procedure } from "../extra/procedure";
 import { googleCalendar } from "../extra/google-calendar";
+import { getNowDateTime } from "../util/dateFormatter";
+import capitalizeFirstLetter from "../util/capitalizeFirstLetter";
 
 // Mapping from number to last conversation id
 const conversations = {};
-const runningMessage = [];
+const runningMessage = {};
+const currentAction = {};
+const stopped = {};
 const threads = loadThreads();
+
+const ACTIONS = {
+	FIND: 0,
+	ADD: 1,
+	DELETE: 2,
+	READ: 3
+};
 
 const retrieveRun = async (threadId: string, run: Run) => {
 	let keepRetrievingRun;
@@ -47,8 +58,106 @@ const waitForAssistantMessage = async (userId: string, run: Run) => {
 	return allMessages.data[0].content[0].text.value;
 };
 
+const runActions = async (message, response, prompt, contactName) => {
+	let action = currentAction[message.from];
+	if (!action) {
+		return false;
+	}
+	response.text = '';
+	while (true) {
+		let fields = [];
+		if ([ACTIONS.FIND, ACTIONS.ADD].indexOf(action.id) != -1) {
+			fields.push({ name: 'name', label: 'Informe o nome do procedimento. Exemplo: Limpeza de pele' });
+		}
+		if ([ACTIONS.FIND, ACTIONS.ADD, ACTIONS.DELETE].indexOf(action.id) != -1) {
+			fields.push({ name: 'date', 'label': 'Informe a data do procedimento. Exemplo: 25/12' });
+		}
+		if ([ACTIONS.ADD].indexOf(action.id) != -1) {
+			fields.push({ name: 'time', 'label': 'Informe a hora do procedimento. Exemplo: 16:30' });
+		}
+		for (let i = 0; i < fields.length; i++) {
+			let field = fields[i];
+			if (action.data[field.name]) {
+				continue;
+			}
+			let newPrompt = String(prompt).trim();
+			if (newPrompt) {
+				try {
+					switch (field.name) {
+						case 'name':
+							procedure.getProcedure(newPrompt);
+							break;
+						case 'date':
+							googleCalendar.parseDateTime(newPrompt);
+							break;
+						case 'time':
+							googleCalendar.parseDateTime(action.data['date'], newPrompt);
+							break;
+					}
+				} catch (error) {
+					response.text = error.message;
+					break;
+				}
+			}
+			if (!action.data[field.name] && !newPrompt) {
+				response.text += field.label;
+				break;
+			}
+			action.data[field.name] = newPrompt;
+			prompt = '';
+		};
+
+		if (response.text) {
+			response.text += '\nPara voltar à conversa digite SAIR';
+			break;
+		}
+		let lastActionId = ([ACTIONS.ADD, ACTIONS.DELETE].indexOf(action.id) !== -1 ? action.id : null);
+		try {
+			if (action.id == ACTIONS.ADD) {
+				response.text = await googleCalendar.addEventByMessage(action.data, message.from, contactName);
+			} else if (action.id == ACTIONS.DELETE) {
+				response.text = await googleCalendar.deleteEventByMessage(action.data, message.from);
+			}
+			if (response.text) {
+				delete currentAction[message.from];
+				break;
+			}
+		} catch (error) {
+			response.text = error.message + '\n\n';
+			action.id = (action.id == ACTIONS.ADD ? ACTIONS.FIND : ACTIONS.READ);
+		}
+
+		if (action.id == ACTIONS.FIND) {
+			let file = await googleCalendar.getProcedureCalendarByMessage(action.data);
+			response.text += googleCalendar.getDisplayCalendarMessage();
+			response.media = MessageMedia.fromFilePath(file);
+		} else if (action.id == ACTIONS.READ) {
+			const { events, file, label } = await googleCalendar.getSchedules(message.from);
+			response.text += label;
+			response.media = (events.length ? MessageMedia.fromFilePath(file) : null);
+		}
+		if (lastActionId) {
+			response.text += '\n\n';
+			let name = action.data['name'];
+			currentAction[message.from] = newAction(lastActionId);
+			action = currentAction[message.from];
+			if (name) {
+				action.data['name'] = name;
+			}
+			continue;
+		}
+		delete currentAction[message.from];
+		break;
+	}
+}
+
+const newAction = function (id) {
+	return { id, start: getNowDateTime(), data: {} };
+}
+
 const handleMessageGPT = async (message: Message, prompt: string) => {
 	try {
+
 		// Get last conversation
 		const lastConversationId = conversations[message.from];
 
@@ -66,123 +175,105 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 
 		while (runningMessage[message.from]) {
 			await sleep(1000);
-			//console.log(runningMessage[message.from]);
 		}
 		runningMessage[message.from] = true;
 
-		let contact = await message.getContact();
-		let contactName = String(contact.name || contact.pushname).split(' ')[0].trim();
-
-		config.prePrompt = loadPrePrompt();
-		const start = Date.now();
-
-		if (!threads[message.from]) {
-			threads[message.from] = (await openai.beta.threads.create()).id;
-			await saveThreads(threads);
-			cli.print(`[GPT] New conversation for ${message.from} (ID: ${threads[message.from]})`);
+		let helloPrompt = 'Olá';
+		let number = message.fromMe ? message.to : message.from;
+		let newPrompt = String(prompt).toLowerCase().trim();
+		if (newPrompt == 'iniciar') {
+			delete stopped[number];
+			prompt = helloPrompt;
 		}
-		if (config.prePrompt) {
-			let prePrompt = config.prePrompt;
-			config.prePrompt = 'Você deverá seguir rigorosamente as seguintes instruções:\n\n';
-			config.prePrompt += 'No início de uma conversa, se apresente para a pessoa.\n\n';
-			if (contactName) {
-				config.prePrompt += `Você estará conversando com ${contactName}. Utilize essa informação como saudação, sempre que você entender que foi iniciada uma conversa.`;
-			} else {
-				config.prePrompt += 'Pergunte o nome da pessoa e armazene essa informação.\n\n';
-			}
-			config.prePrompt += 'Utilize o nome da pessoa durante a conversa, quando julgar necessário.\n\n';
-			config.prePrompt += prePrompt;
+		if (stopped[number]) {
+			return;
 		}
-		let assistant_id = await getAssistantId('Assistant', config.prePrompt);
-		let msg = '';
-
-		msg += `Fale somente sobre os assuntos que você recebeu nas instruções. `;
-		msg += `Se não tiver certeza sobre alguma resposta, não invente uma resposta e diga que você não tem essa informação. `
-		msg += `Responda à seguinte mensagem: ${prompt}\n\n`;
-		msg += `Se a mensagem não estiver diretamente relacionada às instruções que você recebeu, rejeite-a educadamente.`;
-		const threadMessage = await openai.beta.threads.messages.create(threads[message.from], { role: "user", content: msg });
-		const run = await openai.beta.threads.runs.create(threads[message.from], { assistant_id, instructions: config.prePrompt });
-		retrieveRun(threads[message.from], run);
-		let response = { text: '' };
-		try {
-			response.text = await waitForAssistantMessage(message.from, run);
-		} catch (error) {
-			response.text = error.message;
+		if (message.fromMe || newPrompt == 'parar') {
+			stopped[number] = true;
+			return;
+		}
+		console.log(currentAction[number] + ' e ' + newPrompt);
+		if (currentAction[number] && (newPrompt == 'sair' || currentAction[number].start <= getNowDateTime().minus({ minutes: 30 }))) {
+			console.log('delete');
+			delete currentAction[number];
+			prompt = helloPrompt;
 		}
 
-		const end = Date.now() - start;
-
-		/*let promptBuilder = "";
-		// Pre prompt
-		if (config.prePrompt != null && config.prePrompt.trim() != "") {
-			if (lastConversationId) {
-				promptBuilder += "Com base nas seguintes instruções: ";
-			}
-			promptBuilder += config.prePrompt + "\n\n";
-			if (lastConversationId) {
-				promptBuilder += "Responda a seguinte mensagem: ";
-			}
-		}
-		promptBuilder += prompt;
-
-		// Check if we have a conversation with the user
-		let response: ChatMessage;
-		if (lastConversationId) {
-			// Handle message with previous conversation
-			response = await chatgpt.sendMessage(promptBuilder, {
-				parentMessageId: lastConversationId
-			});
-		} else {
-			// Handle message with new conversation
-			response = await chatgpt.sendMessage(promptBuilder);
-			cli.print(`[GPT] New conversation for ${message.from} (ID: ${response.id})`);
-		}
-
-		// Set conversation id
-		conversations[message.from] = response.id;*/
-
+		let response = { text: '', media: undefined };
 		let tmpFilePath = '';
-		let media;
-		try {
-			let text = response.text;
+		let end = 0;
+		let contact = await message.getContact();
+		let contactName = capitalizeFirstLetter(String(contact.name || contact.pushname).split(' ')[0].trim().toLowerCase());
 
-			let isCheckSlotsMessage = googleCalendar.isCheckSlotsMessage(response.text);
-			let isCheckScheduleMessage = googleCalendar.isCheckScheduleMessage(response.text);
-			let isScheduleMessage = googleCalendar.isScheduleMessage(response.text);
-			let isDeleteScheduleMessage = googleCalendar.isDeleteScheduleMessage(response.text);
-			if (isCheckSlotsMessage || isScheduleMessage || isCheckScheduleMessage || isDeleteScheduleMessage) {
-				console.log(response.text);
+		if (!currentAction[message.from]) {
 
-				if (isCheckScheduleMessage) {
-					const { events, file } = await googleCalendar.getSchedules(message.from);
-					response.text = googleCalendar.getCalendarNoScheduledMessage();
-					if (events) {
-						response.text = googleCalendar.getDisplayCalendarScheduledMessage() + '\n\n' + events;
-						media = MessageMedia.fromFilePath(file);
-					}
-				} else if (isDeleteScheduleMessage) {
-					response.text = await googleCalendar.deleteEventByMessage(text, message.from);
-				} else if (isScheduleMessage) {
-					try {
-						response.text = await googleCalendar.addEventByMessage(text, message.from);
-					} catch (error) {
-						response.text = error.message;
-						isCheckSlotsMessage = true;
-					}
-				}
-				if (isCheckSlotsMessage) {
-					tmpFilePath = await googleCalendar.getProcedureCalendarByMessage(text);
-					response.text = (isScheduleMessage ? response.text + ' ' : '') + googleCalendar.getDisplayCalendarMessage();
-					media = MessageMedia.fromFilePath(tmpFilePath);
-				}
+			config.prePrompt = loadPrePrompt();
+			const start = Date.now();
+			if (!threads[message.from]) {
+				threads[message.from] = (await openai.beta.threads.create()).id;
+				await saveThreads(threads);
+				cli.print(`[GPT] New conversation for ${message.from} (ID: ${threads[message.from]})`);
 			}
-		} catch (error) {
-			response.text = error.message;
+			if (config.prePrompt) {
+				let prePrompt = config.prePrompt;
+				config.prePrompt = 'Você deverá seguir rigorosamente as seguintes instruções:\n\n';
+				config.prePrompt += 'No início de uma conversa, se apresente para a pessoa.\n\n';
+				if (contactName) {
+					config.prePrompt += `Você estará conversando com ${contactName}. Utilize essa informação como saudação, sempre que você entender que foi iniciada uma conversa.`;
+				} else {
+					config.prePrompt += 'Pergunte o nome da pessoa e armazene essa informação.\n\n';
+				}
+				config.prePrompt += 'Utilize o nome da pessoa durante a conversa, quando julgar necessário.\n\n';
+				config.prePrompt += prePrompt;
+			}
+			let assistant_id = await getAssistantId('Assistant', config.prePrompt);
+			let msg = '';
+
+			msg += `Fale somente sobre os assuntos que você recebeu nas instruções. `;
+			msg += `Se não tiver certeza sobre alguma resposta, não invente uma resposta e diga que você não tem essa informação. `
+			msg += `Responda à seguinte mensagem: ${prompt}\n\n`;
+			msg += `Se a mensagem não estiver diretamente relacionada às instruções que você recebeu, rejeite-a educadamente.`;
+			const threadMessage = await openai.beta.threads.messages.create(threads[message.from], { role: "user", content: msg });
+			const run = await openai.beta.threads.runs.create(threads[message.from], { assistant_id, instructions: config.prePrompt });
+			retrieveRun(threads[message.from], run);
+			try {
+				response.text = await waitForAssistantMessage(message.from, run);
+			} catch (error) {
+				response.text = error.message;
+			}
+
+			end = Date.now() - start;
+			try {
+				let text = response.text;
+
+				let isCheckSlotsMessage = googleCalendar.isCheckSlotsMessage(response.text);
+				let isCheckScheduleMessage = googleCalendar.isCheckScheduleMessage(response.text);
+				let isScheduleMessage = googleCalendar.isScheduleMessage(response.text);
+				let isDeleteScheduleMessage = googleCalendar.isDeleteScheduleMessage(response.text);
+				if (isCheckSlotsMessage || isScheduleMessage || isCheckScheduleMessage || isDeleteScheduleMessage) {
+					console.log(response.text);
+					let start = getNowDateTime();
+					if (isCheckScheduleMessage) {
+						currentAction[message.from] = newAction(ACTIONS.READ);
+					} else if (isDeleteScheduleMessage) {
+						currentAction[message.from] = newAction(ACTIONS.DELETE);
+					} else if (isScheduleMessage) {
+						currentAction[message.from] = newAction(ACTIONS.ADD);
+					} else if (isCheckSlotsMessage) {
+						currentAction[message.from] = newAction(ACTIONS.FIND);
+					}
+					prompt = '';
+				}
+			} catch (error) {
+				response.text = error.message;
+			}
 		}
 
-		cli.print(`[GPT] Answer to ${message.from}: ${response.text}  | OpenAI request took ${end}ms)`);
+		await runActions(message, response, prompt, contactName);
 
 		delete runningMessage[message.from];
+
+		cli.print(`[GPT] Answer to ${message.from}: ${response.text}  | OpenAI request took ${end}ms)`);
 
 		// TTS reply (Default: disabled)
 		if (getConfig("tts", "enabled")) {
@@ -192,13 +283,13 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 		}
 
 		// Default: Text reply
-		message.reply(response.text, '', { media });
+		message.reply(response.text, '', { media: response.media });
 		if (tmpFilePath) {
 			fs.unlinkSync(tmpFilePath);
 		}
 	} catch (error: any) {
 		console.error("An error occured", error);
-		message.reply("An error occured, please contact the administrator. (" + error.message + ")");
+		message.reply("Erro inesperado, por favor contate o suporte (" + error.message + ")");
 	}
 };
 

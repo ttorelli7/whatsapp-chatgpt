@@ -1,25 +1,6 @@
 
-/*console.log('begin');
-await saveEnv('TESTE', '888');
-throw new Error('ok');*/
-
-/*let slots = await googleCalendar.listSlots(1, '2024-02-14', 1);
-console.log(slots);
-throw new Error('ok');
-try {
-	let x = await googleCalendar.getProcedureCalendarByMessage('Solicitação de consulta de horários para o procedimento "Limpeza de pele" - 20/02 recebida.', 5);
-	console.log(x);
-} catch (err) {
-	console.log(err);
-}*/
-//throw new Error('ok');
-
-/*let slots = await googleCalendar.listSlotsByProcedure('Limpeza de pele', '14/02/2024', 3);
-console.log(slots);
-throw new Error('ok');*/
-
-/*let x = await googleCalendar.listEventsByClient('5519995568725@c.us');
-console.log(x);*/
+//let x = await googleCalendar.addEventByMessage({ name: 'Limpeza de pele', date: '16/03', time: '99:99' }, '9999999');
+//console.log(x);
 
 import qrcode from "qrcode";
 import { Client, Message, Events, LocalAuth } from "whatsapp-web.js";

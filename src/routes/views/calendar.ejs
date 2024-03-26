@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset='utf-8' />
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+    <link href='https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css' rel='stylesheet'>
+    <link href='https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.1/font/bootstrap-icons.css' rel='stylesheet'>
+</head>
+
+<body>
+    <div id="calendar"></div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const urlParams = new URLSearchParams(window.location.search);
+            const timeSlots = JSON.parse(urlParams.get('slots')) || [];
+            /*const timeSlots = [
+                {
+                    start: '2024-02-15 13:00:00',
+                    end: '2024-02-15 14:00:00',
+                    status: 0
+                },
+                {
+                    start: '2024-02-15 08:00:00',
+                    end: '2024-02-15 13:00:00',
+                    status: 1
+                },
+                {
+                    start: '2024-02-15 16:00:00',
+                    end: '2024-02-15 19:00:00',
+                    status: 2
+                },
+            ];*/
+
+            function getLabel(status, label = '') {
+                switch (status) {
+                    case 0:
+                        return 'Indisponível';
+                    case 1:
+                        return 'Disponível';
+                    case 2:
+                        return 'Insuficiente';
+                    case 3:
+                        return label;
+                    default:
+                        return 'Não identificado';
+                }
+            };
+
+            function getColor(status) {
+                switch (status) {
+                    case 0:
+                        return '#851e3e';
+                    case 1:
+                        return '#88b04b';
+                    case 2:
+                        return '#f6cd61';
+                    case 3:
+                        return '#8dbdff';
+                    default:
+                        return 'black';
+                }
+            };
+
+            const events = timeSlots.map(slot => ({
+                title: getLabel(slot.status, slot.label),
+                start: slot.start,
+                end: slot.end,
+                color: getColor(slot.status)
+            }));
+
+            var initialDate = new Date(urlParams.get('initialDate') || Date.now());
+            var dayCount = urlParams.get('dayCount');
+            //var initialDate = new Date();
+            var calendarEl = document.getElementById('calendar');
+            let options = {
+                themeSystem: 'bootstrap5',
+                initialView: (dayCount ? 'timeGridCustom' : 'timeGridWeek'),
+                views: {
+                    timeGridCustom: {
+                        type: 'timeGrid',
+                        dayCount
+                    }
+                },
+                locale: 'pt-br',
+                events,
+                allDaySlot: false,
+                height: "auto",
+                initialDate,
+                //firstDay: 1
+                firstDay: initialDate.getDay(),
+            };
+
+            options.headerToolbar = false;
+            let slotMinTime = urlParams.get('minTime');
+            if (slotMinTime) {
+                options.slotMinTime = slotMinTime + ":00:00";
+            }
+            let slotMaxTime = urlParams.get('maxTime');
+            if (slotMaxTime) {
+                options.slotMaxTime = (parseInt(slotMaxTime, 10) + 1) + ":00:00";
+            }
+
+            var calendar = new FullCalendar.Calendar(calendarEl, options);
+            calendar.render();
+        });
+    </script>
+</body>
+
+</html>
