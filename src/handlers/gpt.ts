@@ -192,9 +192,7 @@ const handleMessageGPT = async (message: Message, prompt: string) => {
 			stopped[number] = true;
 			return;
 		}
-		console.log(currentAction[number] + ' e ' + newPrompt);
 		if (currentAction[number] && (newPrompt == 'sair' || currentAction[number].start <= getNowDateTime().minus({ minutes: 30 }))) {
-			console.log('delete');
 			delete currentAction[number];
 			prompt = helloPrompt;
 		}
